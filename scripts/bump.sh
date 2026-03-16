@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bump flow-next-tui version
+# Bump jenaai-factory version
 # Usage: ./scripts/bump.sh <patch|minor|major>
 
 set -euo pipefail

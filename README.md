@@ -1,10 +1,10 @@
-# flow-next-tui
+# Jenaai Factory
 
-Terminal UI for monitoring [Flow-Next](https://github.com/gmickel/gmickel-claude-marketplace/tree/main/plugins/flow-next) Ralph autonomous agent runs.
+Terminal Command Center for AI Agent Teams. Real-time visibility into autonomous agent runs.
 
-**Flow-Next** is a Claude Code plugin for structured task planning and execution. **Ralph** is its autonomous mode - an external loop that runs Claude overnight, completing epics task-by-task with multi-model review gates.
+Forked from [flow-next-tui](https://github.com/gmickel/gmickel-claude-marketplace/tree/main/flow-next-tui) by Gordon Mickel.
 
-This TUI provides real-time visibility into Ralph runs: task progress, streaming logs, and run state.
+**Jenaai Factory** is a TUI for monitoring [jenaai-flow](https://github.com/jeni5888/jenaai-flow) Ralph autonomous agent runs. It provides real-time visibility into Ralph runs: task progress, streaming logs, and run state.
 
 ## Features
 
@@ -18,33 +18,36 @@ This TUI provides real-time visibility into Ralph runs: task progress, streaming
 ## Requirements
 
 - **Bun** - Runtime (macOS/Linux; Windows untested)
-- **flow-next** - `.flow/` directory with epics/tasks
-- **Ralph** - `scripts/ralph/` scaffolded via `/flow-next:ralph-init`
+- **jenaai-flow** - `.flow/` directory with epics/tasks
+- **Ralph** - `scripts/ralph/` scaffolded via `/jenaai-flow:ralph-init`
 
 ## Installation
 
 ```bash
 # From npm (requires Bun runtime)
-bun add -g @gmickel/flow-next-tui
+bun add -g @jeni5888/jenaai-factory
 
 # Or run directly
-bunx @gmickel/flow-next-tui
+bunx @jeni5888/jenaai-factory
 ```
 
 ## Usage
 
 ```bash
 # Start TUI (auto-selects latest run)
-flow-next-tui
+jenaai-factory
 
 # Or use short alias
+jf
+
+# Legacy alias also works
 fntui
 
 # With options
-flow-next-tui --light          # Light theme
-flow-next-tui --no-emoji       # ASCII icons
-flow-next-tui --run <id>       # Select specific run
-flow-next-tui -v               # Show version
+jenaai-factory --light          # Light theme
+jenaai-factory --no-emoji       # ASCII icons
+jenaai-factory --run <id>       # Select specific run
+jenaai-factory -v               # Show version
 ```
 
 ## Keyboard Shortcuts
@@ -53,8 +56,8 @@ flow-next-tui -v               # Show version
 
 | Key       | Action        |
 | --------- | ------------- |
-| `j` / `↓` | Next task     |
-| `k` / `↑` | Previous task |
+| `j` / `down` | Next task     |
+| `k` / `up` | Previous task |
 
 ### Output Panel
 
@@ -73,34 +76,14 @@ flow-next-tui -v               # Show version
 | `Esc`          | Close overlay          |
 | `q` / `Ctrl+C` | Quit (detach from run) |
 
-## Screenshot
-
-![flow-next-tui](../assets/tui.png)
-
 ## Status Icons
 
 | Icon | ASCII | Meaning     |
 | ---- | ----- | ----------- |
-| `●`  | `[x]` | Done        |
-| `◉`  | `[>]` | In Progress |
-| `○`  | `[ ]` | Todo        |
-| `⊘`  | `[!]` | Blocked     |
-
-## Tool Icons (Output Panel)
-
-| Icon | Tool      |
-| ---- | --------- |
-| `▸`  | Read      |
-| `◂`  | Write     |
-| `✎`  | Edit      |
-| `$`  | Bash      |
-| `◦`  | Glob      |
-| `⌕`  | Grep      |
-| `◈`  | Task      |
-| `⬇`  | WebFetch  |
-| `◎`  | WebSearch |
-| `✓`  | Success   |
-| `✗`  | Failure   |
+| `done` | `[x]` | Done        |
+| `in_progress` | `[>]` | In Progress |
+| `todo` | `[ ]` | Todo        |
+| `blocked` | `[!]` | Blocked     |
 
 ## Integration with Ralph
 
@@ -153,8 +136,6 @@ src/
 ## Development
 
 ```bash
-cd flow-next-tui
-
 # Install dependencies
 bun install
 
@@ -172,19 +153,20 @@ bun run lint
 
 ### "No .flow/ directory"
 
-Run `flowctl init` or ensure you're in a flow-next project root.
+Run `flowctl init` or ensure you're in a jenaai-flow project root.
 
 ### "No scripts/ralph/"
 
-Run `/flow-next:ralph-init` to scaffold the Ralph harness.
+Run `/jenaai-flow:ralph-init` to scaffold the Ralph harness.
 
 ### "flowctl not found"
 
 The TUI searches for flowctl in:
 
 1. `.flow/bin/flowctl`
-2. `plugins/flow-next/scripts/flowctl.py`
-3. System PATH
+2. `plugins/jenaai-flow/scripts/flowctl`
+3. `plugins/flow-next/scripts/flowctl` (legacy)
+4. System PATH
 
 ### Unicode icons look wrong
 

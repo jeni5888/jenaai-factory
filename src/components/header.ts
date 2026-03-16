@@ -112,7 +112,7 @@ export class Header implements Component {
     const borderV = this.useAscii ? '|' : '│';
 
     // Top border with branding label
-    const label = ' flow-next ';
+    const label = ' Jenaai Factory ';
     const labelWidth = visibleWidth(label);
     const borderWidth = width - 2;
     const leftBorderLen = Math.floor((borderWidth - labelWidth) / 2);

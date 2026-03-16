@@ -1,5 +1,5 @@
 /**
- * Main App component for flow-next TUI.
+ * Main App component for Jenaai Factory TUI.
  * Wires together all components with state management and polling.
  */
 
@@ -502,7 +502,7 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
   const flowDir = join(repoRoot, ".flow");
   if (!(await dirExists(flowDir))) {
     renderError(
-      "No .flow/ directory. Run flowctl init or ensure you're in a flow-next project.",
+      "No .flow/ directory. Run flowctl init or ensure you're in a jenaai-flow project.",
       theme
     );
     process.exit(1);
@@ -512,7 +512,7 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
   const ralphDir = join(repoRoot, "scripts", "ralph");
   if (!(await dirExists(ralphDir))) {
     renderError(
-      "No scripts/ralph/. Run /flow-next:ralph-init to scaffold Ralph.",
+      "No scripts/ralph/. Run /jenaai-flow:ralph-init to scaffold Ralph.",
       theme
     );
     process.exit(1);

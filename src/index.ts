@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * CLI entry point for flow-next-tui.
+ * CLI entry point for Jenaai Factory.
  * Parses arguments and starts the TUI.
  */
 import { Command } from 'commander';
@@ -17,8 +17,8 @@ try {
 const program = new Command();
 
 program
-  .name('flow-next-tui')
-  .description('TUI for monitoring Flow-Next Ralph mode runs')
+  .name('jenaai-factory')
+  .description('Jenaai Factory - Terminal Command Center for AI Agent Teams')
   .version(pkg.version, '-v, --version')
   .option('-l, --light', 'Use light theme')
   .option('--no-emoji', 'Use ASCII icons instead of unicode')

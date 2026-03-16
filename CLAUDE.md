@@ -1,6 +1,6 @@
-# flow-next-tui
+# Jenaai Factory
 
-Terminal UI for flow-next Ralph mode. Real-time visibility into autonomous agent runs.
+Terminal Command Center for AI Agent Teams. Real-time visibility into autonomous agent runs.
 
 ## Quick Commands
 
@@ -153,18 +153,14 @@ Utilities:
 - `wrapTextWithAnsi()` - word wrap preserving ANSI
 - `applyBackgroundToLine()` - bg color with padding
 
-Local reference: `/Users/gordon/tmp/pi-mono/packages/tui`
-
 ## Design Language
 
 Industrial/utilitarian with electric cyan accent. 256-color palette.
 
-Status icons: `●` done, `◉` in_progress, `○` todo, `⊘` blocked
+Status icons: `done` done, `in_progress` in_progress, `todo` todo, `blocked` blocked
 ASCII mode (--no-emoji): `[x]`, `[>]`, `[ ]`, `[!]`
 
 ## References
 
-- Epic spec: `.flow/specs/fn-9.md` or `flowctl cat fn-9`
-- Full spec: `plans/flow-next-tui-spec.md`
-- flowctl: `plugins/flow-next/scripts/flowctl.py`
-- ralph.sh: `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh`
+- flowctl: `plugins/jenaai-flow/scripts/flowctl` or `plugins/flow-next/scripts/flowctl`
+- ralph.sh: `scripts/ralph/ralph.sh`

@@ -1,7 +1,7 @@
 {
-  "name": "@gmickel/flow-next-tui",
+  "name": "@jeni5888/jenaai-factory",
   "version": "0.1.2",
-  "description": "A beautiful TUI app to watch your Flow-Next Ralph Mode runs",
+  "description": "Jenaai Factory - Terminal Command Center for AI Agent Teams",
   "keywords": [
     "claude-code",
     "execution",
@@ -9,20 +9,23 @@
     "plugin",
     "ralph",
     "ralph-mode",
-    "workflow"
+    "workflow",
+    "jenaai",
+    "factory"
   ],
-  "homepage": "https://mickel.tech/apps/flow-next",
+  "homepage": "https://github.com/jeni5888/jenaai-factory",
   "bugs": {
-    "url": "https://github.com/gmickel/gmickel-claude-marketplace/issues"
+    "url": "https://github.com/jeni5888/jenaai-factory/issues"
   },
   "license": "MIT",
-  "author": "Gordon Mickel <gordon@mickel.tech>",
+  "author": "jeni5888",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gmickel/gmickel-claude-marketplace.git"
+    "url": "git+https://github.com/jeni5888/jenaai-factory.git"
   },
   "bin": {
-    "flow-next-tui": "src/index.ts",
+    "jenaai-factory": "src/index.ts",
+    "jf": "src/index.ts",
     "fntui": "src/index.ts"
   },
   "files": [

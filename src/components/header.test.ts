@@ -69,12 +69,12 @@ describe('Header', () => {
     expect(lines).toHaveLength(3);
   });
 
-  test('top border contains flow-next branding', () => {
+  test('top border contains Jenaai Factory branding', () => {
     const header = new Header(defaultProps());
     const lines = header.render(80);
 
     const stripped = stripAnsi(lines[0]!);
-    expect(stripped).toContain('flow-next');
+    expect(stripped).toContain('Jenaai Factory');
     expect(stripped).toContain('╭'); // rounded corner
   });
 
@@ -189,7 +189,7 @@ describe('Header', () => {
     expect(lines).toHaveLength(3);
     const stripped0 = stripAnsi(lines[0]!);
     const stripped1 = stripAnsi(lines[1]!);
-    expect(stripped0).toContain('flow-next');
+    expect(stripped0).toContain('Jenaai Factory');
     expect(stripped1).toContain('Iter');
   });
 
