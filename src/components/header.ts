@@ -34,6 +34,12 @@ export interface HeaderProps {
   elapsed: number;
   theme: Theme;
   useAscii?: boolean;
+  // Token/cost tracking
+  inputTokens?: string; // pre-formatted, e.g. "45.2K"
+  outputTokens?: string;
+  cost?: string; // pre-formatted, e.g. "$2.34"
+  // Team status
+  teamStatus?: string; // e.g. "2 active" or "Review: SHIP"
 }
 
 /**
@@ -61,6 +67,10 @@ export class Header implements Component {
   private elapsed: number;
   private theme: Theme;
   private useAscii: boolean;
+  private inputTokens: string;
+  private outputTokens: string;
+  private cost: string;
+  private teamStatus: string;
 
   constructor(props: HeaderProps) {
     this.state = props.state;
@@ -71,6 +81,10 @@ export class Header implements Component {
     this.elapsed = props.elapsed;
     this.theme = props.theme;
     this.useAscii = props.useAscii ?? false;
+    this.inputTokens = props.inputTokens ?? '';
+    this.outputTokens = props.outputTokens ?? '';
+    this.cost = props.cost ?? '';
+    this.teamStatus = props.teamStatus ?? '';
   }
 
   update(props: Partial<HeaderProps>): void {
@@ -83,6 +97,10 @@ export class Header implements Component {
     if (props.elapsed !== undefined) this.elapsed = props.elapsed;
     if (props.theme !== undefined) this.theme = props.theme;
     if (props.useAscii !== undefined) this.useAscii = props.useAscii;
+    if (props.inputTokens !== undefined) this.inputTokens = props.inputTokens;
+    if (props.outputTokens !== undefined) this.outputTokens = props.outputTokens;
+    if (props.cost !== undefined) this.cost = props.cost;
+    if (props.teamStatus !== undefined) this.teamStatus = props.teamStatus;
   }
 
   private getStateIcon(): string {
@@ -179,6 +197,44 @@ export class Header implements Component {
         truncateToWidth(contentLine, width - 2, '…') +
         this.theme.border(borderV)
     );
+
+    // Second row: token/cost + team status (only if we have data)
+    const hasTokenData = this.inputTokens || this.cost;
+    const hasTeamData = this.teamStatus;
+    if (hasTokenData || hasTeamData) {
+      const row2Parts: string[] = [];
+      const row2Raw: string[] = [];
+
+      if (this.inputTokens || this.outputTokens) {
+        const tokenSeg = this.theme.dim('\u2193') + this.theme.text(this.inputTokens || '0') + this.theme.dim(' \u2191') + this.theme.text(this.outputTokens || '0');
+        row2Parts.push(tokenSeg);
+        row2Raw.push(`\u2193${this.inputTokens || '0'} \u2191${this.outputTokens || '0'}`);
+      }
+
+      if (this.cost) {
+        const costSeg = this.theme.accent(this.cost);
+        row2Parts.push(costSeg);
+        row2Raw.push(this.cost);
+      }
+
+      if (this.teamStatus) {
+        const teamSeg = this.theme.dim('Team: ') + this.theme.text(this.teamStatus);
+        row2Parts.push(teamSeg);
+        row2Raw.push(`Team: ${this.teamStatus}`);
+      }
+
+      const row2Left = row2Parts.join(this.theme.border(' \u2502 '));
+      const row2LeftRaw = row2Raw.join(' \u2502 ');
+      const row2LeftWidth = visibleWidth(row2LeftRaw);
+      const row2Gap = Math.max(1, contentWidth - row2LeftWidth);
+      const row2Line = ' ' + row2Left + ' '.repeat(row2Gap) + ' ';
+
+      lines.push(
+        this.theme.border(borderV) +
+          truncateToWidth(row2Line, width - 2, '\u2026') +
+          this.theme.border(borderV)
+      );
+    }
 
     // Bottom border
     const bottomBorder =

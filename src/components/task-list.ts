@@ -40,6 +40,8 @@ export interface TaskListProps {
   maxVisible?: number;
   /** Optional: use ASCII icons instead of Unicode (default: false) */
   useAscii?: boolean;
+  /** Optional: per-task cost map (taskId -> formatted cost string) */
+  taskCosts?: Map<string, string>;
 }
 
 /**
@@ -59,6 +61,7 @@ export class TaskList implements Component {
   private theme: Theme;
   private maxVisible: number;
   private useAscii: boolean;
+  private taskCosts: Map<string, string>;
 
   constructor(props: TaskListProps) {
     this.tasks = props.tasks;
@@ -73,6 +76,12 @@ export class TaskList implements Component {
     // Ensure maxVisible is at least 1
     this.maxVisible = Math.max(1, props.maxVisible ?? 10);
     this.useAscii = props.useAscii ?? false;
+    this.taskCosts = props.taskCosts ?? new Map();
+  }
+
+  /** Update per-task cost display */
+  setTaskCosts(costs: Map<string, string>): void {
+    this.taskCosts = costs;
   }
 
   /** Clamp index to valid range [0, length-1], or 0 if empty */
@@ -235,17 +244,20 @@ export class TaskList implements Component {
       const validBg = bgCode >= 0 && bgCode <= 255;
       const statusFgCode = this.getStatusColorCode(task);
 
-      // Format: "▶ fn-1.3 Task title..."
+      // Format: "▶ fn-1.3 Task title... $0.12"
       const depStr = this.formatDependency(task);
+      const costStr = this.taskCosts.get(task.id) ?? '';
 
       // Build task line content
       const idDisplay = task.id;
+      const costSuffix = costStr ? ` ${costStr}` : '';
       const availableForTitle = Math.max(
         0,
         contentWidth -
           visibleWidth(icon) -
           visibleWidth(idDisplay) -
           visibleWidth(depStr) -
+          visibleWidth(costSuffix) -
           3
       );
       const truncatedTitle = truncateToWidth(
@@ -267,13 +279,17 @@ export class TaskList implements Component {
             chalk.bgAnsi256(bgCode).ansi256(textFgCode)(truncatedTitle) +
             (depStr
               ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr)
+              : '') +
+            (costSuffix
+              ? chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(costSuffix)
               : '');
         } else {
           content =
             chalk.ansi256(statusFgCode)(icon) +
             chalk.ansi256(dimFgCode)(` ${idDisplay} `) +
             chalk.ansi256(textFgCode)(truncatedTitle) +
-            (depStr ? chalk.ansi256(statusFgCode)(depStr) : '');
+            (depStr ? chalk.ansi256(statusFgCode)(depStr) : '') +
+            (costSuffix ? chalk.ansi256(dimFgCode)(costSuffix) : '');
         }
 
         const rawLen =
@@ -281,6 +297,7 @@ export class TaskList implements Component {
           visibleWidth(idDisplay) +
           visibleWidth(truncatedTitle) +
           visibleWidth(depStr) +
+          visibleWidth(costSuffix) +
           2;
         const paddingNeeded = Math.max(0, contentWidth - rawLen);
         const padding = validBg
@@ -299,13 +316,15 @@ export class TaskList implements Component {
           colorFn(icon) +
           this.theme.dim(` ${idDisplay} `) +
           truncatedTitle +
-          (depStr ? colorFn(depStr) : '');
+          (depStr ? colorFn(depStr) : '') +
+          (costSuffix ? this.theme.dim(costSuffix) : '');
 
         const rawLen =
           visibleWidth(icon) +
           visibleWidth(idDisplay) +
           visibleWidth(truncatedTitle) +
           visibleWidth(depStr) +
+          visibleWidth(costSuffix) +
           2;
         const paddingNeeded = Math.max(0, contentWidth - rawLen);
 

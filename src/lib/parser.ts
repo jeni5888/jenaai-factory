@@ -187,15 +187,41 @@ export function parseLineMulti(line: string): LogEntry[] {
     }
 
     case 'result': {
-      // Final result message
-      const resultContent = (parsed as { result?: string }).result;
-      if (resultContent) {
-        entries.push({
-          type: 'response',
-          content: coerceToString(resultContent),
-          success: true,
-        });
+      // Final result message with token usage
+      const resultObj = parsed as {
+        result?: string;
+        cost_usd?: number;
+        total_cost_usd?: number;
+        is_error?: boolean;
+        model?: string;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        };
+      };
+      const resultContent = resultObj.result;
+      const entry: LogEntry = {
+        type: 'response',
+        content: coerceToString(resultContent ?? ''),
+        success: !resultObj.is_error,
+      };
+
+      // Extract token usage
+      if (resultObj.usage) {
+        entry.usage = {
+          inputTokens: resultObj.usage.input_tokens ?? 0,
+          outputTokens: resultObj.usage.output_tokens ?? 0,
+          cacheReadTokens: resultObj.usage.cache_read_input_tokens ?? 0,
+          cacheWriteTokens: resultObj.usage.cache_creation_input_tokens ?? 0,
+        };
       }
+      if (resultObj.cost_usd != null) entry.costUsd = resultObj.cost_usd;
+      if (resultObj.total_cost_usd != null) entry.totalCostUsd = resultObj.total_cost_usd;
+      if (resultObj.model) entry.model = resultObj.model;
+
+      entries.push(entry);
       break;
     }
 

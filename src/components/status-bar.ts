@@ -17,6 +17,7 @@ import {
 export interface StatusBarProps {
   runId?: string;
   errorCount?: number;
+  totalCost?: string; // pre-formatted, e.g. "$2.34 total"
   theme: Theme;
 }
 
@@ -27,17 +28,20 @@ export interface StatusBarProps {
 export class StatusBar implements Component {
   private runId: string | undefined;
   private errorCount: number;
+  private totalCost: string | undefined;
   private theme: Theme;
 
   constructor(props: StatusBarProps) {
     this.runId = props.runId;
     this.errorCount = props.errorCount ?? 0;
+    this.totalCost = props.totalCost;
     this.theme = props.theme;
   }
 
   update(props: Partial<StatusBarProps>): void {
     if ('runId' in props) this.runId = props.runId;
     if ('errorCount' in props) this.errorCount = props.errorCount ?? 0;
+    if ('totalCost' in props) this.totalCost = props.totalCost;
     if ('theme' in props && props.theme) this.theme = props.theme;
   }
 
@@ -66,7 +70,15 @@ export class StatusBar implements Component {
       });
     }
 
-    // Segment 3: Error count (if any)
+    // Segment 3: Total cost (if available)
+    if (this.totalCost) {
+      segments.push({
+        raw: this.totalCost,
+        colored: this.theme.accent(this.totalCost),
+      });
+    }
+
+    // Segment 4: Error count (if any)
     if (this.errorCount > 0) {
       const errText = `${this.errorCount} error${this.errorCount === 1 ? '' : 's'}`;
       segments.push({

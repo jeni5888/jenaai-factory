@@ -14,6 +14,8 @@ import { join } from "node:path";
 
 import type { Epic, EpicTask, LogEntry, Run, Task } from "./lib/types.ts";
 
+import { CostTracker } from "./lib/cost-tracker.ts";
+import { TeamsTracker } from "./lib/teams-tracker.ts";
 import { Header } from "./components/header.ts";
 import { HelpOverlay } from "./components/help-overlay.ts";
 import { OutputPanel } from "./components/output.ts";
@@ -135,6 +137,10 @@ class App implements Component {
   private helpOverlay: HelpOverlay;
   private taskSplitPanel: SplitPanel;
 
+  // Trackers
+  private costTracker: CostTracker;
+  private teamsTracker: TeamsTracker;
+
   // References
   private logWatcher: LogWatcher | null = null;
   private taskPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -153,6 +159,15 @@ class App implements Component {
     this.state = state;
     this.theme = theme;
     this.useAscii = useAscii;
+
+    // Create trackers
+    this.costTracker = new CostTracker();
+    this.teamsTracker = new TeamsTracker();
+
+    // Set initial task for cost tracking
+    if (currentTask) {
+      this.costTracker.setCurrentTask(currentTask.id);
+    }
 
     // Create components
     this.header = new Header({
@@ -177,6 +192,7 @@ class App implements Component {
       },
       onSelectionChange: (task, index) => {
         this.state.selectedTaskIndex = index;
+        this.costTracker.setCurrentTask(task.id);
         void this.updateTaskDetail(task.id);
       },
       theme,
@@ -240,12 +256,29 @@ class App implements Component {
         ).length;
         this.statusBar.update({ errorCount: currentErrorCount });
       }
+
+      // Feed token usage to CostTracker
+      if (entry.usage) {
+        this.costTracker.addUsage(entry.usage);
+        if (entry.model) {
+          this.costTracker.setModel(entry.model);
+        }
+        this.updateTokenDisplay();
+      }
+
+      // Feed text content to TeamsTracker for team event detection
+      if (entry.content) {
+        this.teamsTracker.processLogLine(entry.content);
+        this.updateTeamDisplay();
+      }
+
       this.tui?.requestRender();
     });
     this.logWatcher.on("new-iteration", (iteration) => {
       this.state.iteration = iteration;
       this.outputPanel.setIteration(iteration);
       this.outputPanel.clearBuffer();
+      this.costTracker.resetIteration();
       this.header.update({ iteration });
       this.tui?.requestRender();
     });
@@ -324,6 +357,47 @@ class App implements Component {
     }
   }
 
+  private updateTokenDisplay(): void {
+    const total = this.costTracker.total;
+    const inputStr = this.costTracker.formatTokens(total.inputTokens);
+    const outputStr = this.costTracker.formatTokens(total.outputTokens);
+    const costStr = this.costTracker.formatCost(this.costTracker.totalCost);
+
+    this.header.update({
+      inputTokens: inputStr,
+      outputTokens: outputStr,
+      cost: costStr,
+    });
+    this.statusBar.update({ totalCost: `${costStr} total` });
+
+    // Update per-task costs in task list
+    const taskCostMap = new Map<string, string>();
+    for (const tc of this.costTracker.tasks) {
+      if (tc.cost > 0.005) { // Only show if > half a cent
+        taskCostMap.set(tc.taskId, this.costTracker.formatCost(tc.cost));
+      }
+    }
+    this.taskList.setTaskCosts(taskCostMap);
+  }
+
+  private updateTeamDisplay(): void {
+    const active = this.teamsTracker.activeCount;
+    const review = this.teamsTracker.review;
+    const devil = this.teamsTracker.devil;
+
+    let teamStatus = '';
+    if (review) {
+      teamStatus = `Review: ${review}`;
+      if (devil) teamStatus += ` | Devil: ${devil}`;
+    } else if (active > 0) {
+      teamStatus = `${active} active`;
+    }
+
+    if (teamStatus) {
+      this.header.update({ teamStatus });
+    }
+  }
+
   private async updateTaskDetail(taskId: string): Promise<void> {
     // Use request token to handle out-of-order responses from rapid navigation
     const req = ++this.taskDetailReq;
@@ -366,8 +440,9 @@ class App implements Component {
     const isCompact = width < COMPACT_WIDTH || height < COMPACT_HEIGHT;
 
     // Calculate layout heights (clamp to avoid negative slice indices)
-    // Header is now 3 rows: top border, content, bottom border
-    const headerHeight = isCompact ? 1 : 3;
+    // Header is 3 rows normally, 4 rows when token/team data is shown
+    const hasTokenData = this.costTracker.totalCost > 0 || this.teamsTracker.activeCount > 0 || this.teamsTracker.review !== '';
+    const headerHeight = isCompact ? 1 : (hasTokenData ? 4 : 3);
     const statusBarHeight = 1;
     const contentHeight = Math.max(0, height - headerHeight - statusBarHeight);
 

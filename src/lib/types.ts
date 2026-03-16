@@ -170,6 +170,16 @@ export interface LogEntry {
   content: string;
   success?: boolean;
   timestamp?: string; // ISO timestamp if available
+  // Token usage from result messages (stream-json format)
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+  };
+  costUsd?: number; // cost_usd from result message
+  totalCostUsd?: number; // total_cost_usd from result message
+  model?: string; // model identifier if available
 }
 
 /**
