@@ -162,5 +162,5 @@ ASCII mode (--no-emoji): `[x]`, `[>]`, `[ ]`, `[!]`
 
 ## References
 
-- flowctl: `plugins/jenaai-flow/scripts/flowctl` or `plugins/flow-next/scripts/flowctl`
+- flowctl: `plugins/jenaai-flow/scripts/flowctl` (preferred) or `plugins/flow-next/scripts/flowctl` (legacy fallback)
 - ralph.sh: `scripts/ralph/ralph.sh`

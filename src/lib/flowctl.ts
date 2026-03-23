@@ -162,8 +162,8 @@ export class FlowctlNotFoundError extends Error {
  * Search order:
  * 1. .flow/bin/flowctl (installed via /jenaai-flow:setup)
  * 2. ./plugins/jenaai-flow/scripts/flowctl (preferred)
- * 2b. ./plugins/flow-next/scripts/flowctl (legacy compat)
- * 3. Search up to repo root for plugins/jenaai-flow/scripts/flowctl or plugins/flow-next/scripts/flowctl
+ * 2b. ./plugins/flow-next/scripts/flowctl (legacy fallback)
+ * 3. Search up to repo root for plugins/jenaai-flow/scripts/flowctl
  * 4. flowctl or flowctl.py on PATH (via Bun.which)
  * 5. Error with helpful message
  *

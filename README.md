@@ -165,7 +165,7 @@ The TUI searches for flowctl in:
 
 1. `.flow/bin/flowctl`
 2. `plugins/jenaai-flow/scripts/flowctl`
-3. `plugins/flow-next/scripts/flowctl` (legacy)
+3. `plugins/flow-next/scripts/flowctl` (legacy fallback)
 4. System PATH
 
 ### Unicode icons look wrong

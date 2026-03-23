@@ -15,7 +15,7 @@ export class RalphNotFoundError extends Error {
 
   constructor(searchedPaths: string[]) {
     const paths = searchedPaths.join(', ');
-    const msg = `ralph.sh not found. Run \`/flow-next:ralph-init\` to scaffold scripts/ralph/. Searched: ${paths}`;
+    const msg = `ralph.sh not found. Run \`/jenaai-flow:ralph-init\` to scaffold scripts/ralph/. Searched: ${paths}`;
     super(msg);
     this.name = 'RalphNotFoundError';
     this.searchedPaths = searchedPaths;
@@ -52,8 +52,8 @@ async function isReadableFile(path: string): Promise<boolean> {
  * Find ralph.sh location
  *
  * Search order:
- * 1. scripts/ralph/ralph.sh (repo-local after /flow-next:ralph-init)
- * 2. plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
+ * 1. scripts/ralph/ralph.sh (repo-local after /jenaai-flow:ralph-init)
+ * 2. plugins/jenaai-flow/skills/jenaai-flow-ralph-init/templates/ralph.sh
  * 3. null (caller should show helpful error)
  *
  * @param startDir Starting directory (defaults to cwd)
@@ -77,9 +77,9 @@ export async function findRalphScript(
   const templatePath = join(
     repoRoot,
     'plugins',
-    'flow-next',
+    'jenaai-flow',
     'skills',
-    'flow-next-ralph-init',
+    'jenaai-flow-ralph-init',
     'templates',
     'ralph.sh'
   );

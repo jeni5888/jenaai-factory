@@ -61,9 +61,9 @@ describe('spawn', () => {
       const templateDir = join(
         tempDir,
         'plugins',
-        'flow-next',
+        'jenaai-flow',
         'skills',
-        'flow-next-ralph-init',
+        'jenaai-flow-ralph-init',
         'templates'
       );
       await mkdir(templateDir, { recursive: true });
@@ -91,9 +91,9 @@ describe('spawn', () => {
       const templateDir = join(
         tempDir,
         'plugins',
-        'flow-next',
+        'jenaai-flow',
         'skills',
-        'flow-next-ralph-init',
+        'jenaai-flow-ralph-init',
         'templates'
       );
       await mkdir(templateDir, { recursive: true });
@@ -187,7 +187,7 @@ describe('spawn', () => {
       const error = new RalphNotFoundError(paths);
 
       expect(error.name).toBe('RalphNotFoundError');
-      expect(error.message).toContain('/flow-next:ralph-init');
+      expect(error.message).toContain('/jenaai-flow:ralph-init');
       expect(error.message).toContain('/path/one');
       expect(error.message).toContain('/path/two');
       expect(error.searchedPaths).toEqual(paths);
