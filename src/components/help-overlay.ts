@@ -18,10 +18,21 @@ const KEYBINDINGS: Array<{ key: string; desc: string }> = [
   { key: 'Ctrl+C', desc: 'Same as q' },
 ];
 
+/**
+ * Review-pipeline legend shown under the keybindings.
+ * Explains the stage icons the parser now emits for claude-team review signals.
+ */
+const REVIEW_LEGEND: Array<{ key: string; desc: string }> = [
+  { key: '⚖', desc: 'Reviewer verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)' },
+  { key: '🗡', desc: "Devil's advocate (APPROVE/OBJECT)" },
+  { key: '🔎', desc: 'Auditor, v1.5 (PASS/MINOR/MAJOR/CRITICAL)' },
+  { key: '🎯', desc: 'Goal gate, v1.5 (0–100 score)' },
+];
+
 /** Minimum overlay width (includes border chars) */
 const MIN_OVERLAY_WIDTH = 30;
 /** Maximum overlay width */
-const MAX_OVERLAY_WIDTH = 50;
+const MAX_OVERLAY_WIDTH = 64;
 /** Vertical padding inside box */
 const VERTICAL_PADDING = 1;
 
@@ -111,6 +122,31 @@ export class HelpOverlay implements Component {
       const truncatedDesc = truncatedLine.slice(keyColWidth);
       const coloredLine =
         this.theme.accent(truncatedKey) + this.theme.text(truncatedDesc);
+      contentLines.push({
+        line: coloredLine,
+        width: visibleWidth(truncatedLine),
+      });
+    }
+
+    // v1.5 review-pipeline legend section
+    contentLines.push({ line: '', width: 0 });
+    const legendHeaderRaw = 'Review pipeline (claude-team)';
+    const legendHeader = truncateToWidth(legendHeaderRaw, innerWidth, '…');
+    contentLines.push({
+      line: this.theme.accent(legendHeader),
+      width: visibleWidth(legendHeader),
+    });
+    const legendKeyWidth =
+      Math.max(...REVIEW_LEGEND.map((e) => visibleWidth(e.key))) + 2;
+    for (const entry of REVIEW_LEGEND) {
+      const keyPart = entry.key + ' '.repeat(
+        Math.max(0, legendKeyWidth - visibleWidth(entry.key))
+      );
+      const fullLine = keyPart + entry.desc;
+      const truncatedLine = truncateToWidth(fullLine, innerWidth, '…');
+      const iconPart = entry.key;
+      const descPart = truncatedLine.slice(iconPart.length);
+      const coloredLine = this.theme.accent(iconPart) + this.theme.text(descPart);
       contentLines.push({
         line: coloredLine,
         width: visibleWidth(truncatedLine),

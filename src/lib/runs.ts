@@ -19,11 +19,36 @@ export interface RunDetails {
 }
 
 /**
- * Receipt status for a task
+ * Receipt status for a task.
+ *
+ * `plan` / `impl` stay boolean for backward compat with v1.4. `implDetail` is
+ * the parsed impl-review receipt JSON when present — used to surface the
+ * claude-team 3-agent + goal-gate pipeline in the detail panel (v1.5+):
+ *   - verdict        (SHIP / NEEDS_WORK / MAJOR_RETHINK)
+ *   - mode           (claude-team | codex | rp | export | none)
+ *   - auditVerdict   (PASS | MINOR | MAJOR | CRITICAL)      — v1.5
+ *   - goalScore      (0–100, from requirement-verifier)     — v1.5
+ *   - architecture   (score_before / score_after / delta / bottleneck) — v1.3
+ *
+ * `reviewRounds` is the count of `.flow/reviews/<TASK>-r*.md` findings files,
+ * i.e. how many R&R Continuation rounds this task has gone through (v1.5+).
  */
 export interface ReceiptStatus {
   plan?: boolean;
   impl?: boolean;
+  implDetail?: {
+    verdict?: 'SHIP' | 'NEEDS_WORK' | 'MAJOR_RETHINK';
+    mode?: string;
+    auditVerdict?: 'PASS' | 'MINOR' | 'MAJOR' | 'CRITICAL';
+    goalScore?: number;
+    architecture?: {
+      scoreBefore?: number;
+      scoreAfter?: number;
+      delta?: string;
+      bottleneck?: string;
+    };
+  };
+  reviewRounds?: number;
 }
 
 /**
@@ -389,10 +414,65 @@ export async function getReceiptStatus(
     fileExists(implPath),
   ]);
 
-  return {
+  const status: ReceiptStatus = {
     plan: hasPlan ? true : undefined,
     impl: hasImpl ? true : undefined,
   };
+
+  // v1.5+: parse impl receipt for verdict / audit-verdict / goal-score / architecture
+  if (hasImpl) {
+    try {
+      const raw = await Bun.file(implPath).text();
+      const json = JSON.parse(raw) as Record<string, unknown>;
+      const detail: NonNullable<ReceiptStatus['implDetail']> = {};
+      if (
+        json.verdict === 'SHIP' ||
+        json.verdict === 'NEEDS_WORK' ||
+        json.verdict === 'MAJOR_RETHINK'
+      ) {
+        detail.verdict = json.verdict;
+      }
+      if (typeof json.mode === 'string') detail.mode = json.mode;
+      if (typeof json.audit_verdict === 'string') {
+        const v = json.audit_verdict;
+        if (v === 'PASS' || v === 'MINOR' || v === 'MAJOR' || v === 'CRITICAL') {
+          detail.auditVerdict = v;
+        }
+      }
+      if (typeof json.goal_score === 'number') detail.goalScore = json.goal_score;
+      if (json.architecture && typeof json.architecture === 'object') {
+        const arch = json.architecture as Record<string, unknown>;
+        detail.architecture = {
+          scoreBefore:
+            typeof arch.score_before === 'number' ? arch.score_before : undefined,
+          scoreAfter:
+            typeof arch.score_after === 'number' ? arch.score_after : undefined,
+          delta: typeof arch.delta === 'string' ? arch.delta : undefined,
+          bottleneck:
+            typeof arch.bottleneck === 'string' ? arch.bottleneck : undefined,
+        };
+      }
+      if (Object.keys(detail).length > 0) status.implDetail = detail;
+    } catch {
+      // corrupt receipt — stay with boolean flag only
+    }
+  }
+
+  // v1.5+: count R&R Continuation rounds from .flow/reviews/<TASK>-r*.md
+  try {
+    const repoRoot = await findRepoRoot();
+    const reviewsDir = join(repoRoot, '.flow', 'reviews');
+    const files = await readdir(reviewsDir);
+    const prefix = `${taskId}-r`;
+    const count = files.filter(
+      (f) => f.startsWith(prefix) && f.endsWith('.md')
+    ).length;
+    if (count > 0) status.reviewRounds = count;
+  } catch {
+    // .flow/reviews/ doesn't exist or isn't readable — pre-v1.5 repo
+  }
+
+  return status;
 }
 
 /**

@@ -169,6 +169,88 @@ export class TaskDetail implements Component {
     return `Plan ${planStatus}  Impl ${implStatus}`;
   }
 
+  /**
+   * Format the v1.5 pipeline row: primary verdict, audit verdict, goal score,
+   * review-rounds counter. Returns an empty string when no v1.5 signals exist,
+   * so older repos see the old UI unchanged.
+   */
+  private formatPipeline(): string {
+    const detail = this.receipts.implDetail;
+    const rounds = this.receipts.reviewRounds;
+    if (!detail && !rounds) return '';
+
+    const parts: string[] = [];
+
+    if (detail?.verdict) {
+      const colorFn =
+        detail.verdict === 'SHIP'
+          ? this.theme.success
+          : detail.verdict === 'NEEDS_WORK'
+            ? this.theme.warning
+            : this.theme.error;
+      parts.push(this.theme.dim('Verdict: ') + colorFn(detail.verdict));
+    }
+
+    if (detail?.auditVerdict) {
+      const v = detail.auditVerdict;
+      const colorFn =
+        v === 'PASS'
+          ? this.theme.success
+          : v === 'MINOR'
+            ? this.theme.dim
+            : v === 'MAJOR'
+              ? this.theme.warning
+              : this.theme.error;
+      parts.push(this.theme.dim('Audit: ') + colorFn(v));
+    }
+
+    if (typeof detail?.goalScore === 'number') {
+      const s = detail.goalScore;
+      const colorFn =
+        s >= 80
+          ? this.theme.success
+          : s >= 50
+            ? this.theme.warning
+            : this.theme.error;
+      parts.push(this.theme.dim('Goal: ') + colorFn(`${s}/100`));
+    }
+
+    if (rounds && rounds > 0) {
+      parts.push(
+        this.theme.dim('Rounds: ') + this.theme.accent(String(rounds))
+      );
+    }
+
+    return parts.join(this.theme.dim('  │  '));
+  }
+
+  /**
+   * Format optional architecture line from v1.3 feedback loop.
+   * Returns empty string when not present.
+   */
+  private formatArchitecture(): string {
+    const arch = this.receipts.implDetail?.architecture;
+    if (!arch || arch.scoreAfter === undefined) return '';
+
+    const parts: string[] = [];
+    if (arch.scoreAfter !== undefined) {
+      const before = arch.scoreBefore;
+      const after = arch.scoreAfter;
+      const dir =
+        before !== undefined
+          ? after >= before
+            ? this.theme.success
+            : this.theme.warning
+          : this.theme.accent;
+      const beforeStr = before !== undefined ? `${before}→` : '';
+      parts.push(this.theme.dim('Arch: ') + dir(`${beforeStr}${after}`));
+    }
+    if (arch.delta) parts.push(this.theme.dim(arch.delta));
+    if (arch.bottleneck) parts.push(this.theme.dim(`⚑ ${arch.bottleneck}`));
+
+    return parts.join(this.theme.dim('  │  '));
+  }
+
   /** Render header section (icon, title, metadata, receipts) */
   private renderHeader(width: number): string[] {
     const lines: string[] = [];
@@ -196,6 +278,18 @@ export class TaskDetail implements Component {
     const receipts = this.formatReceipts();
     const metaLine = statusBadge + this.theme.dim('  │  ') + receipts;
     lines.push(truncateToWidth(metaLine, contentWidth, '…'));
+
+    // v1.5 pipeline row (verdict + audit + goal + rounds) — only if data exists
+    const pipeline = this.formatPipeline();
+    if (pipeline) {
+      lines.push(truncateToWidth(pipeline, contentWidth, '…'));
+    }
+
+    // v1.3 architecture row — only if baseline data exists
+    const arch = this.formatArchitecture();
+    if (arch) {
+      lines.push(truncateToWidth(arch, contentWidth, '…'));
+    }
 
     // Block reason (if blocked)
     if (this.blockReason && this.task.status === 'blocked') {

@@ -16,6 +16,11 @@ export const TOOL_ICONS = {
   WebSearch: '◎', // web search (bullseye)
   success: '✓', // success checkmark
   failure: '✗', // failure X
+  // v1.5 claude-team review signals
+  'review-reviewer': '⚖', // primary reviewer verdict (scales)
+  'review-devil': '🗡', // devil's advocate verdict (dagger)
+  'review-auditor': '🔎', // auditor verdict (magnifier)
+  'review-goal': '🎯', // goal-gate score (target)
 } as const;
 
 /**
@@ -33,6 +38,10 @@ export const ASCII_ICONS = {
   WebSearch: '?',
   success: '+',
   failure: 'x',
+  'review-reviewer': 'V',
+  'review-devil': 'D',
+  'review-auditor': 'A',
+  'review-goal': 'G',
 } as const;
 
 /**
@@ -99,9 +108,22 @@ export function getIcon(tool: string, ascii = false): string {
  * @param ascii Use ASCII fallbacks instead of unicode
  */
 export function iconForEntry(
-  entry: { type: string; tool?: string; success?: boolean },
+  entry: { type: string; tool?: string; success?: boolean; reviewSignal?: string },
   ascii = false
 ): string {
+  // For review-signal entries, use dedicated stage icons (v1.5+)
+  if (entry.type === 'review-signal' && entry.reviewSignal) {
+    switch (entry.reviewSignal) {
+      case 'verdict':
+        return getIcon('review-reviewer', ascii);
+      case 'devil-verdict':
+        return getIcon('review-devil', ascii);
+      case 'audit-verdict':
+        return getIcon('review-auditor', ascii);
+      case 'goal-score':
+        return getIcon('review-goal', ascii);
+    }
+  }
   // For tool entries, use tool name
   if (entry.type === 'tool' && entry.tool) {
     return getIcon(entry.tool, ascii);
@@ -125,6 +147,51 @@ export function iconForEntry(
 export function parseLine(line: string): LogEntry | null {
   const entries = parseLineMulti(line);
   return entries.length > 0 ? (entries[0] ?? null) : null;
+}
+
+/**
+ * Regex patterns for the claude-team review signal tags.
+ *
+ * The 3-agent + goal-gate pipeline (v1.5+) emits these in the final text block
+ * of each reviewer's response. The TUI parses them independently so it can
+ * show the pipeline state even when the receipt JSON hasn't been written yet.
+ */
+const REVIEW_SIGNAL_PATTERNS: Array<{
+  kind: 'verdict' | 'devil-verdict' | 'audit-verdict' | 'goal-score';
+  re: RegExp;
+}> = [
+  { kind: 'verdict', re: /<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)<\/verdict>/g },
+  { kind: 'devil-verdict', re: /<devil-verdict>(APPROVE|OBJECT)<\/devil-verdict>/g },
+  {
+    kind: 'audit-verdict',
+    re: /<audit-verdict>(PASS|MINOR|MAJOR|CRITICAL)<\/audit-verdict>/g,
+  },
+  { kind: 'goal-score', re: /<goal-score>(\d{1,3})<\/goal-score>/g },
+];
+
+/**
+ * Scan a text block for review-signal tags and emit one LogEntry per match.
+ * Used for assistant text blocks and user tool_result blocks that contain the
+ * final output of claude-team reviewers.
+ */
+export function detectReviewSignals(text: string): LogEntry[] {
+  if (!text) return [];
+  const out: LogEntry[] = [];
+  for (const { kind, re } of REVIEW_SIGNAL_PATTERNS) {
+    const matches = text.matchAll(re);
+    for (const m of matches) {
+      const value = m[1];
+      if (value === undefined) continue;
+      out.push({
+        type: 'review-signal',
+        content: `${kind}=${value}`,
+        reviewSignal: kind,
+        reviewValue: value,
+        success: kind === 'goal-score' ? parseInt(value, 10) >= 80 : undefined,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -162,10 +229,12 @@ export function parseLineMulti(line: string): LogEntry[] {
             content: formatToolInput(tool, block.input),
           });
         } else if (block.type === 'text' && block.text) {
-          entries.push({
-            type: 'response',
-            content: coerceToString(block.text),
-          });
+          const text = coerceToString(block.text);
+          entries.push({ type: 'response', content: text });
+          // v1.5+: surface claude-team review verdicts before the receipt lands
+          for (const signal of detectReviewSignals(text)) {
+            entries.push(signal);
+          }
         }
       }
       break;
@@ -181,6 +250,10 @@ export function parseLineMulti(line: string): LogEntry[] {
             content,
             success: !block.is_error,
           });
+          // v1.5+: reviewer subagents deliver their verdict inside tool_result
+          for (const signal of detectReviewSignals(content)) {
+            entries.push(signal);
+          }
         }
       }
       break;

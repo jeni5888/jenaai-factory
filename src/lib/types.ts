@@ -8,7 +8,16 @@ export type EpicStatus = 'open' | 'done';
 export type RunState = 'running' | 'complete' | 'crashed';
 
 // Log entry types for iter-*.log parsing
-export type LogEntryType = 'tool' | 'response' | 'error';
+// 'review-signal' is emitted when the parser detects claude-team review verdicts
+// (<verdict>, <devil-verdict>, <audit-verdict>, <goal-score>) in tool output.
+export type LogEntryType = 'tool' | 'response' | 'error' | 'review-signal';
+
+// Subtypes for review-signal entries (claude-team 3-agent + goal-gate pipeline, v1.5+)
+export type ReviewSignalKind =
+  | 'verdict' // primary reviewer
+  | 'devil-verdict' // devil's advocate
+  | 'audit-verdict' // auditor (v1.5)
+  | 'goal-score'; // requirement verifier (v1.5)
 
 /**
  * Task as returned by flowctl show/tasks commands
@@ -180,16 +189,34 @@ export interface LogEntry {
   costUsd?: number; // cost_usd from result message
   totalCostUsd?: number; // total_cost_usd from result message
   model?: string; // model identifier if available
+  // Set when type === 'review-signal': which stage emitted the verdict
+  reviewSignal?: ReviewSignalKind;
+  // Literal value from the tag (e.g. "SHIP", "APPROVE", "CRITICAL", "87")
+  reviewValue?: string;
 }
 
 /**
  * Review receipt from impl-review
+ *
+ * v1.5+ additions (all optional — v1.4 receipts stay valid):
+ * - auditVerdict from jenaai-auditor (PASS|MINOR|MAJOR|CRITICAL)
+ * - goalScore from jenaai-requirement-verifier (0–100)
+ * - architecture from jenaai-architect feedback loop
  */
 export interface ReviewReceipt {
   verdict: 'SHIP' | 'NEEDS_WORK' | 'MAJOR_RETHINK';
   timestamp: string;
   summary?: string;
   issues?: string[];
+  mode?: 'claude-team' | 'codex' | 'rp' | 'export' | 'none';
+  auditVerdict?: 'PASS' | 'MINOR' | 'MAJOR' | 'CRITICAL';
+  goalScore?: number;
+  architecture?: {
+    scoreBefore?: number;
+    scoreAfter?: number;
+    delta?: string;
+    bottleneck?: string;
+  };
 }
 
 /**
