@@ -56,6 +56,13 @@ export class OutputPanel implements Component {
   private viewportHeight = 20;
   private autoScroll = true; // Auto-scroll enabled by default
 
+  // v0.3: persistent thinking mirror ring — last 3 thinking blocks with
+  // timestamps, rendered at the top of the viewport when the current
+  // visible entries are tools. Makes extended reasoning visible even after
+  // it scrolls out of the main log. Survives normal buffer trimming.
+  private thinkingRing: Array<{ content: string; at: number }> = [];
+  private static readonly THINKING_RING_CAP = 3;
+
   constructor(props: OutputPanelProps) {
     this.buffer = props.buffer ?? [];
     this.iteration = props.iteration ?? 0;
@@ -71,6 +78,14 @@ export class OutputPanel implements Component {
 
     this.buffer.push(entry);
 
+    // v0.3: capture thinking blocks into the persistent ring buffer.
+    if (entry.type === 'thinking' && entry.content) {
+      this.thinkingRing.push({ content: entry.content, at: Date.now() });
+      while (this.thinkingRing.length > OutputPanel.THINKING_RING_CAP) {
+        this.thinkingRing.shift();
+      }
+    }
+
     // Trim buffer if over limit
     if (this.buffer.length > this.maxBuffer) {
       const excess = this.buffer.length - this.maxBuffer;
@@ -83,6 +98,11 @@ export class OutputPanel implements Component {
     if (this.autoScroll || wasAtBottom) {
       this.scrollToBottom();
     }
+  }
+
+  /** v0.3: get a snapshot of the thinking ring (most recent last). */
+  getThinkingRing(): ReadonlyArray<{ content: string; at: number }> {
+    return this.thinkingRing;
   }
 
   /** Set the current iteration number */
@@ -322,6 +342,41 @@ export class OutputPanel implements Component {
     );
   }
 
+  /**
+   * v0.3: render the thinking-mirror strip at the top of the viewport.
+   * Only appears when the ring has entries AND the current visible portion
+   * of the buffer is dominated by non-thinking entries — so fresh reasoning
+   * stays on-screen even after it scrolls past.
+   */
+  private renderThinkingStrip(
+    width: number,
+    visibleEntries: readonly LogEntry[]
+  ): string[] {
+    if (this.thinkingRing.length === 0) return [];
+    // Skip the strip when the viewport already contains a thinking entry
+    // near the top — no duplication.
+    const topFive = visibleEntries.slice(0, 5);
+    if (topFive.some((e) => e.type === 'thinking')) return [];
+
+    const borderChar = this.useAscii ? '|' : '│';
+    const contentWidth = width - 2;
+    const now = Date.now();
+    const icon = this.useAscii ? '~' : '💭';
+
+    return this.thinkingRing.map((item) => {
+      const ageSec = Math.max(0, Math.floor((now - item.at) / 1000));
+      const ageLabel = ageSec < 60 ? `-${ageSec}s` : `-${Math.floor(ageSec / 60)}m`;
+      const prefix = this.theme.accent(icon) + ' ' + this.theme.dim(`[${ageLabel}] `);
+      const prefixWidth = visibleWidth(stripAnsi(prefix));
+      const avail = Math.max(0, contentWidth - prefixWidth);
+      const body = this.sanitize(item.content).replace(/\n+/g, ' ').trim();
+      const truncated = truncateToWidth(body, avail, '…');
+      const line = prefix + this.theme.dim(truncated);
+      const padded = padToWidth(line, contentWidth);
+      return this.theme.border(borderChar) + padded + this.theme.border(borderChar);
+    });
+  }
+
   render(width: number): string[] {
     if (width <= 2) return [];
 
@@ -337,11 +392,24 @@ export class OutputPanel implements Component {
     // Clamp scroll before rendering
     this.clampScroll();
 
-    // Get visible portion of buffer
-    const visibleEntries = this.buffer.slice(
+    // v0.3: prepend thinking-mirror strip (cost: at most 3 rows off the
+    // visible buffer slice so scroll math stays intact).
+    const rawVisible = this.buffer.slice(
       this.scrollOffset,
       this.scrollOffset + this.viewportHeight
     );
+    const thinkingStripLines = this.renderThinkingStrip(width, rawVisible);
+
+    // When the strip is shown, it consumes N rows off the top of the
+    // viewport so the output still fits the frame.
+    const visibleEntries = rawVisible.slice(
+      0,
+      Math.max(0, this.viewportHeight - thinkingStripLines.length)
+    );
+
+    for (const stripLine of thinkingStripLines) {
+      lines.push(stripLine);
+    }
 
     // Render each visible entry
     for (const entry of visibleEntries) {
@@ -353,7 +421,8 @@ export class OutputPanel implements Component {
     }
 
     // Fill remaining viewport with empty lines
-    const emptyLinesNeeded = this.viewportHeight - visibleEntries.length;
+    const usedRows = thinkingStripLines.length + visibleEntries.length;
+    const emptyLinesNeeded = this.viewportHeight - usedRows;
     const emptyLine =
       this.theme.border(borderChar) +
       ' '.repeat(contentWidth) +
