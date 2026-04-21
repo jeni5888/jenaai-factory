@@ -121,6 +121,18 @@ export class TaskList implements Component {
     }
   }
 
+  /**
+   * Update the maximum number of tasks visible at once before scrolling.
+   * Called by the parent layout each render so the list uses whatever
+   * vertical space is actually available instead of being stuck at 10.
+   * Default stays 10 when unset (backward compat).
+   */
+  setMaxVisible(n: number): void {
+    const clamped = Math.max(1, Math.floor(n));
+    if (clamped === this.maxVisible) return;
+    this.maxVisible = clamped;
+  }
+
   /** Get status icon for a task */
   private getStatusIcon(task: EpicTask): string {
     const icons = this.useAscii ? ASCII_ICONS : STATUS_ICONS;

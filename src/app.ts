@@ -478,6 +478,12 @@ class App implements Component {
       const taskPanelHeight = Math.floor(contentHeight * 0.4);
       const outputHeight = contentHeight - taskPanelHeight;
 
+      // Let the TaskList fill all available rows instead of its default
+      // cap of 10 — top border (1) + scroll indicator row (1) = 2 overhead.
+      this.taskList.setMaxVisible(Math.max(1, taskPanelHeight - 2));
+      // Keep TaskDetail scroll sane for the same viewport.
+      this.taskDetail.setViewportHeight(taskPanelHeight);
+
       // Task split panel
       const taskLines = this.taskSplitPanel.render(width);
       lines.push(...taskLines.slice(0, taskPanelHeight));

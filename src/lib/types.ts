@@ -10,7 +10,14 @@ export type RunState = 'running' | 'complete' | 'crashed';
 // Log entry types for iter-*.log parsing
 // 'review-signal' is emitted when the parser detects claude-team review verdicts
 // (<verdict>, <devil-verdict>, <audit-verdict>, <goal-score>) in tool output.
-export type LogEntryType = 'tool' | 'response' | 'error' | 'review-signal';
+// 'thinking' is emitted for extended-thinking blocks so the TUI can mirror the
+// agent's reasoning stream live (v0.2.1+).
+export type LogEntryType =
+  | 'tool'
+  | 'response'
+  | 'error'
+  | 'review-signal'
+  | 'thinking';
 
 // Subtypes for review-signal entries (claude-team 3-agent + goal-gate pipeline, v1.5+)
 export type ReviewSignalKind =

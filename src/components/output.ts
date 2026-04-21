@@ -139,6 +139,11 @@ export class OutputPanel implements Component {
     if (entry.type === 'tool') {
       return this.theme.accent;
     }
+    // Thinking entries get the subtle "progress" colour so they read as
+    // ambient reasoning rather than user-facing output (v0.2.1).
+    if (entry.type === 'thinking') {
+      return this.theme.progress;
+    }
     return this.theme.dim;
   }
 

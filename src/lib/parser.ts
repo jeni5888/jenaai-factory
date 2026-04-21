@@ -21,6 +21,8 @@ export const TOOL_ICONS = {
   'review-devil': '🗡', // devil's advocate verdict (dagger)
   'review-auditor': '🔎', // auditor verdict (magnifier)
   'review-goal': '🎯', // goal-gate score (target)
+  // v0.2.1 extended-thinking mirror
+  thinking: '💭', // reasoning/thinking stream
 } as const;
 
 /**
@@ -42,6 +44,7 @@ export const ASCII_ICONS = {
   'review-devil': 'D',
   'review-auditor': 'A',
   'review-goal': 'G',
+  thinking: '~',
 } as const;
 
 /**
@@ -111,6 +114,10 @@ export function iconForEntry(
   entry: { type: string; tool?: string; success?: boolean; reviewSignal?: string },
   ascii = false
 ): string {
+  // Thinking entries get the bubble icon (v0.2.1)
+  if (entry.type === 'thinking') {
+    return getIcon('thinking', ascii);
+  }
   // For review-signal entries, use dedicated stage icons (v1.5+)
   if (entry.type === 'review-signal' && entry.reviewSignal) {
     switch (entry.reviewSignal) {
@@ -235,6 +242,14 @@ export function parseLineMulti(line: string): LogEntry[] {
           for (const signal of detectReviewSignals(text)) {
             entries.push(signal);
           }
+        } else if (block.type === 'thinking' && block.thinking) {
+          // v0.2.1: mirror extended-thinking blocks so you can see what the
+          // agent is reasoning about in real time. The stream-json emits
+          // thinking as its own block type alongside text and tool_use.
+          entries.push({
+            type: 'thinking',
+            content: coerceToString(block.thinking),
+          });
         }
       }
       break;
