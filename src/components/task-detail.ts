@@ -204,6 +204,11 @@ export class TaskDetail implements Component {
       parts.push(this.theme.dim('Audit: ') + colorFn(v));
     }
 
+    // v0.3: expose review mode (claude-team / codex / rp / export / none)
+    if (detail?.mode) {
+      parts.push(this.theme.dim('Mode: ') + this.theme.accent(detail.mode));
+    }
+
     if (typeof detail?.goalScore === 'number') {
       const s = detail.goalScore;
       const colorFn =

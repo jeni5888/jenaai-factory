@@ -62,6 +62,8 @@ export class TaskList implements Component {
   private maxVisible: number;
   private useAscii: boolean;
   private taskCosts: Map<string, string>;
+  private taskRounds: Map<string, number> = new Map();
+  private taskVerdicts: Map<string, string> = new Map();
 
   constructor(props: TaskListProps) {
     this.tasks = props.tasks;
@@ -82,6 +84,20 @@ export class TaskList implements Component {
   /** Update per-task cost display */
   setTaskCosts(costs: Map<string, string>): void {
     this.taskCosts = costs;
+  }
+
+  /** v0.3: per-task review-round counter shown as `·N` suffix. */
+  setTaskRounds(rounds: Map<string, number>): void {
+    this.taskRounds = rounds;
+  }
+
+  /**
+   * v0.3: per-task latest review signal rendered as a one-char icon
+   * before the cost. Map value is the icon character (e.g. "⚖" or "🎯")
+   * — callers produce it from the parser's TOOL_ICONS table.
+   */
+  setTaskVerdicts(verdicts: Map<string, string>): void {
+    this.taskVerdicts = verdicts;
   }
 
   /** Clamp index to valid range [0, length-1], or 0 if empty */
@@ -194,6 +210,45 @@ export class TaskList implements Component {
     return ` → ${short}`;
   }
 
+  /**
+   * v0.3: meta segment rendered between task ID and title.
+   * Currently just the priority chip (P0/P1/P2) — keep narrow.
+   */
+  private formatPriority(task: EpicTask): string {
+    if (task.priority === null || task.priority === undefined) return '';
+    const p = task.priority;
+    return `P${p} `;
+  }
+
+  /** Color function for priority chip: P0 red, P1 warning, P2+ dim. */
+  private priorityColor(task: EpicTask): (s: string) => string {
+    const p = task.priority;
+    if (p === 0) return this.theme.error;
+    if (p === 1) return this.theme.warning;
+    return this.theme.dim;
+  }
+
+  /** 256-color code for priority chip under a selected-row background. */
+  private priorityCode(task: EpicTask): number {
+    const p = task.priority;
+    if (p === 0) return this.theme.palette.error;
+    if (p === 1) return this.theme.palette.warning;
+    return this.theme.palette.dim;
+  }
+
+  /**
+   * v0.3: trailing meta (rounds + last verdict icon) shown before cost.
+   * Format: ` ⚖·2 ` — icon + counter. Either piece is optional.
+   */
+  private formatMetaSuffix(task: EpicTask): string {
+    const parts: string[] = [];
+    const verdict = this.taskVerdicts.get(task.id);
+    if (verdict) parts.push(verdict);
+    const rounds = this.taskRounds.get(task.id);
+    if (rounds && rounds > 0) parts.push(`·${rounds}`);
+    return parts.length > 0 ? ` ${parts.join('')}` : '';
+  }
+
   render(width: number): string[] {
     const lines: string[] = [];
     const borderH = this.useAscii ? '-' : '─';
@@ -256,9 +311,11 @@ export class TaskList implements Component {
       const validBg = bgCode >= 0 && bgCode <= 255;
       const statusFgCode = this.getStatusColorCode(task);
 
-      // Format: "▶ fn-1.3 Task title... $0.12"
+      // Format: "▶ P1 fn-1.3 Task title... ⚖·2 $0.12"
       const depStr = this.formatDependency(task);
       const costStr = this.taskCosts.get(task.id) ?? '';
+      const priorityStr = contentWidth >= 40 ? this.formatPriority(task) : '';
+      const metaSuffix = contentWidth >= 50 ? this.formatMetaSuffix(task) : '';
 
       // Build task line content
       const idDisplay = task.id;
@@ -267,8 +324,10 @@ export class TaskList implements Component {
         0,
         contentWidth -
           visibleWidth(icon) -
+          visibleWidth(priorityStr) -
           visibleWidth(idDisplay) -
           visibleWidth(depStr) -
+          visibleWidth(metaSuffix) -
           visibleWidth(costSuffix) -
           3
       );
@@ -277,6 +336,8 @@ export class TaskList implements Component {
         availableForTitle,
         '…'
       );
+
+      const priorityColorFn = this.priorityColor(task);
 
       if (isSelected) {
         // Selected row with background highlight
@@ -287,10 +348,17 @@ export class TaskList implements Component {
         if (validBg) {
           content =
             chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(icon) +
-            chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(` ${idDisplay} `) +
+            ' ' +
+            (priorityStr
+              ? chalk.bgAnsi256(bgCode).ansi256(this.priorityCode(task))(priorityStr)
+              : '') +
+            chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(`${idDisplay} `) +
             chalk.bgAnsi256(bgCode).ansi256(textFgCode)(truncatedTitle) +
             (depStr
               ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr)
+              : '') +
+            (metaSuffix
+              ? chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(metaSuffix)
               : '') +
             (costSuffix
               ? chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(costSuffix)
@@ -298,19 +366,24 @@ export class TaskList implements Component {
         } else {
           content =
             chalk.ansi256(statusFgCode)(icon) +
-            chalk.ansi256(dimFgCode)(` ${idDisplay} `) +
+            ' ' +
+            (priorityStr ? priorityColorFn(priorityStr) : '') +
+            chalk.ansi256(dimFgCode)(`${idDisplay} `) +
             chalk.ansi256(textFgCode)(truncatedTitle) +
             (depStr ? chalk.ansi256(statusFgCode)(depStr) : '') +
+            (metaSuffix ? this.theme.dim(metaSuffix) : '') +
             (costSuffix ? chalk.ansi256(dimFgCode)(costSuffix) : '');
         }
 
         const rawLen =
           visibleWidth(icon) +
-          visibleWidth(idDisplay) +
+          1 +
+          visibleWidth(priorityStr) +
+          visibleWidth(idDisplay) + 1 +
           visibleWidth(truncatedTitle) +
           visibleWidth(depStr) +
-          visibleWidth(costSuffix) +
-          2;
+          visibleWidth(metaSuffix) +
+          visibleWidth(costSuffix);
         const paddingNeeded = Math.max(0, contentWidth - rawLen);
         const padding = validBg
           ? chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded))
@@ -326,18 +399,23 @@ export class TaskList implements Component {
         // Unselected row
         const content =
           colorFn(icon) +
-          this.theme.dim(` ${idDisplay} `) +
+          ' ' +
+          (priorityStr ? priorityColorFn(priorityStr) : '') +
+          this.theme.dim(`${idDisplay} `) +
           truncatedTitle +
           (depStr ? colorFn(depStr) : '') +
+          (metaSuffix ? this.theme.dim(metaSuffix) : '') +
           (costSuffix ? this.theme.dim(costSuffix) : '');
 
         const rawLen =
           visibleWidth(icon) +
-          visibleWidth(idDisplay) +
+          1 +
+          visibleWidth(priorityStr) +
+          visibleWidth(idDisplay) + 1 +
           visibleWidth(truncatedTitle) +
           visibleWidth(depStr) +
-          visibleWidth(costSuffix) +
-          2;
+          visibleWidth(metaSuffix) +
+          visibleWidth(costSuffix);
         const paddingNeeded = Math.max(0, contentWidth - rawLen);
 
         const fullContent = ' ' + content + ' '.repeat(paddingNeeded) + ' ';

@@ -19,6 +19,7 @@ import { TeamsTracker } from "./lib/teams-tracker.ts";
 import { Header } from "./components/header.ts";
 import { HelpOverlay } from "./components/help-overlay.ts";
 import { OutputPanel } from "./components/output.ts";
+import { RosterPanel } from "./components/roster-panel.ts";
 import { SplitPanel } from "./components/split-panel.ts";
 import { StatusBar } from "./components/status-bar.ts";
 import { TaskDetail } from "./components/task-detail.ts";
@@ -136,10 +137,14 @@ class App implements Component {
   private statusBar: StatusBar;
   private helpOverlay: HelpOverlay;
   private taskSplitPanel: SplitPanel;
+  private rosterPanel: RosterPanel;
 
   // Trackers
   private costTracker: CostTracker;
   private teamsTracker: TeamsTracker;
+
+  // v0.3: iter clock start
+  private iterStartMs: number = Date.now();
 
   // References
   private logWatcher: LogWatcher | null = null;
@@ -193,6 +198,7 @@ class App implements Component {
       onSelectionChange: (task, index) => {
         this.state.selectedTaskIndex = index;
         this.costTracker.setCurrentTask(task.id);
+        this.teamsTracker.setCurrentTask(task.id);
         void this.updateTaskDetail(task.id);
       },
       theme,
@@ -237,6 +243,13 @@ class App implements Component {
       ratio: 0.4,
       active: "left",
     });
+
+    // v0.3: Subagent Roster Panel — always visible money-shot
+    this.rosterPanel = new RosterPanel({
+      rows: this.teamsTracker.rosterSnapshot(),
+      theme,
+      useAscii,
+    });
   }
 
   setTui(tui: TUI): void {
@@ -269,8 +282,15 @@ class App implements Component {
       // Feed text content to TeamsTracker for team event detection
       if (entry.content) {
         this.teamsTracker.processLogLine(entry.content);
-        this.updateTeamDisplay();
       }
+
+      // v0.3: structured review-signal entries go straight into the tracker
+      if (entry.type === "review-signal") {
+        this.teamsTracker.processSignal(entry);
+      }
+
+      this.updateTeamDisplay();
+      this.rosterPanel.setRows(this.teamsTracker.rosterSnapshot());
 
       this.tui?.requestRender();
     });
@@ -279,6 +299,11 @@ class App implements Component {
       this.outputPanel.setIteration(iteration);
       this.outputPanel.clearBuffer();
       this.costTracker.resetIteration();
+      // v0.3: teams-tracker.reset() clears per-iteration state but
+      // preserves per-task history (verdictsByTask, roundsByTask).
+      this.teamsTracker.reset();
+      this.rosterPanel.setRows(this.teamsTracker.rosterSnapshot());
+      this.iterStartMs = Date.now();
       this.header.update({ iteration });
       this.tui?.requestRender();
     });
@@ -340,7 +365,21 @@ class App implements Component {
         0,
         Math.floor((Date.now() - runStartMs) / 1000)
       );
+      const iterElapsedSec = Math.max(
+        0,
+        Math.floor((Date.now() - this.iterStartMs) / 1000)
+      );
       this.header.update({ elapsed: this.state.elapsed });
+      this.statusBar.update({
+        iterElapsedSec,
+        epicProgress: {
+          done: this.state.tasks.filter((t) => t.status === 'done').length,
+          total: this.state.tasks.length,
+        },
+      });
+      // v0.3: rosterSnapshot is cheap; re-emit so elapsed seconds on
+      // working agents tick visibly every second.
+      this.rosterPanel.setRows(this.teamsTracker.rosterSnapshot());
       this.tui?.requestRender();
     }, TIMER_INTERVAL);
   }
@@ -362,18 +401,26 @@ class App implements Component {
     const inputStr = this.costTracker.formatTokens(total.inputTokens);
     const outputStr = this.costTracker.formatTokens(total.outputTokens);
     const costStr = this.costTracker.formatCost(this.costTracker.totalCost);
+    const cachePct = this.costTracker.cacheHitPct();
+    const rate = this.costTracker.ratePerHour(this.state.elapsed);
 
     this.header.update({
       inputTokens: inputStr,
       outputTokens: outputStr,
       cost: costStr,
+      cachePct,
+      rateUsdPerHour: rate,
     });
-    this.statusBar.update({ totalCost: `${costStr} total` });
+    this.statusBar.update({
+      totalCost: `${costStr} total`,
+      rateUsdPerHour: rate,
+    });
 
-    // Update per-task costs in task list
+    // Update per-task costs in task list (v0.3: threshold lowered so
+    // even cheap tasks show a badge).
     const taskCostMap = new Map<string, string>();
     for (const tc of this.costTracker.tasks) {
-      if (tc.cost > 0.005) { // Only show if > half a cent
+      if (tc.cost > 0.001) {
         taskCostMap.set(tc.taskId, this.costTracker.formatCost(tc.cost));
       }
     }
@@ -384,11 +431,17 @@ class App implements Component {
     const active = this.teamsTracker.activeCount;
     const review = this.teamsTracker.review;
     const devil = this.teamsTracker.devil;
+    const audit = this.teamsTracker.audit;
+    const goal = this.teamsTracker.goal;
 
     let teamStatus = '';
-    if (review) {
-      teamStatus = `Review: ${review}`;
-      if (devil) teamStatus += ` | Devil: ${devil}`;
+    const fragments: string[] = [];
+    if (review) fragments.push(`R:${review}`);
+    if (devil) fragments.push(`D:${devil}`);
+    if (audit) fragments.push(`A:${audit}`);
+    if (goal) fragments.push(`G:${goal}`);
+    if (fragments.length > 0) {
+      teamStatus = fragments.join(' ');
     } else if (active > 0) {
       teamStatus = `${active} active`;
     }
@@ -439,10 +492,24 @@ class App implements Component {
     const height = terminal?.rows ?? 40;
     const isCompact = width < COMPACT_WIDTH || height < COMPACT_HEIGHT;
 
+    // v0.3: Expertenmodus layout kicks in at ≥160 cols — roster becomes a
+    // 26-col left sidebar, always visible.
+    const WIDE_MODE_WIDTH = 160;
+    const SIDEBAR_WIDTH = 26;
+    const isWideMode = !isCompact && width >= WIDE_MODE_WIDTH;
+
+    // Always refresh roster rows before the render loop consumes them.
+    this.rosterPanel.setRows(this.teamsTracker.rosterSnapshot());
+
     // Calculate layout heights (clamp to avoid negative slice indices)
-    // Header is 3 rows normally, 4 rows when token/team data is shown
-    const hasTokenData = this.costTracker.totalCost > 0 || this.teamsTracker.activeCount > 0 || this.teamsTracker.review !== '';
-    const headerHeight = isCompact ? 1 : (hasTokenData ? 4 : 3);
+    // Header is 3 rows normally, 4 rows when token/team data is shown,
+    // 5 rows at wide mode when we also get the epic/plan-review row.
+    const hasTokenData =
+      this.costTracker.totalCost > 0 ||
+      this.teamsTracker.activeCount > 0 ||
+      this.teamsTracker.review !== '';
+    const hasRow3 = width >= 140 && this.state.currentRun !== undefined;
+    const headerHeight = isCompact ? 1 : (hasTokenData ? (hasRow3 ? 5 : 4) : 3);
     const statusBarHeight = 1;
     const contentHeight = Math.max(0, height - headerHeight - statusBarHeight);
 
@@ -473,16 +540,46 @@ class App implements Component {
       // Compact: full-width output only
       const outputLines = this.outputPanel.render(width);
       lines.push(...outputLines.slice(0, contentHeight));
-    } else {
-      // Normal: TaskList|TaskDetail above OutputPanel
+    } else if (isWideMode) {
+      // v0.3 wide mode: [Roster Sidebar | Task Split + Output]
+      const mainWidth = width - SIDEBAR_WIDTH - 1; // 1 for separator
       const taskPanelHeight = Math.floor(contentHeight * 0.4);
       const outputHeight = contentHeight - taskPanelHeight;
 
-      // Let the TaskList fill all available rows instead of its default
-      // cap of 10 — top border (1) + scroll indicator row (1) = 2 overhead.
       this.taskList.setMaxVisible(Math.max(1, taskPanelHeight - 2));
-      // Keep TaskDetail scroll sane for the same viewport.
       this.taskDetail.setViewportHeight(taskPanelHeight);
+      this.outputPanel.setViewportHeight(outputHeight);
+
+      const rosterLines = this.rosterPanel.render(SIDEBAR_WIDTH);
+      const taskLines = this.taskSplitPanel.render(mainWidth).slice(0, taskPanelHeight);
+      const outputLines = this.outputPanel.render(mainWidth).slice(0, outputHeight);
+      const mainLines = [...taskLines, ...outputLines];
+
+      const sep = this.theme.border('│');
+      const padRoster = (r: string) => {
+        // Roster lines come pre-padded to SIDEBAR_WIDTH.
+        return r;
+      };
+      for (let i = 0; i < contentHeight; i++) {
+        const l =
+          (rosterLines[i] ?? ' '.repeat(SIDEBAR_WIDTH)).padEnd(SIDEBAR_WIDTH);
+        const r = mainLines[i] ?? ' '.repeat(mainWidth);
+        lines.push(padRoster(l) + sep + r);
+      }
+    } else {
+      // Normal: TaskList|TaskDetail + Roster strip (6 rows) + OutputPanel
+      const taskPanelHeight = Math.floor(contentHeight * 0.36);
+      const rosterStripHeight = Math.min(7, Math.max(5, contentHeight - taskPanelHeight - 10));
+      // RosterPanel renders as borders + 5 rows = 7 lines. Give it 7 when possible.
+      const effectiveRoster = Math.min(7, rosterStripHeight);
+      const outputHeight = Math.max(
+        3,
+        contentHeight - taskPanelHeight - effectiveRoster
+      );
+
+      this.taskList.setMaxVisible(Math.max(1, taskPanelHeight - 2));
+      this.taskDetail.setViewportHeight(taskPanelHeight);
+      this.outputPanel.setViewportHeight(outputHeight);
 
       // Task split panel
       const taskLines = this.taskSplitPanel.render(width);
@@ -490,6 +587,13 @@ class App implements Component {
 
       // Pad if task panel is shorter
       while (lines.length < headerHeight + taskPanelHeight) {
+        lines.push(" ".repeat(width));
+      }
+
+      // Roster strip (v0.3) — 7 lines at most
+      const rosterLines = this.rosterPanel.render(width);
+      lines.push(...rosterLines.slice(0, effectiveRoster));
+      while (lines.length < headerHeight + taskPanelHeight + effectiveRoster) {
         lines.push(" ".repeat(width));
       }
 
@@ -501,9 +605,6 @@ class App implements Component {
     // Status bar
     const statusLines = this.statusBar.render(width);
     lines.push(...statusLines);
-
-    // Help overlay (renders on top via TUI overlay system)
-    // Note: handled separately via tui.showOverlay
 
     return lines;
   }

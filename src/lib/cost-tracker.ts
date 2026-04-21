@@ -89,6 +89,31 @@ export class CostTracker {
     return this.taskCosts.get(taskId)?.cost ?? 0;
   }
 
+  /** Per-task cost breakdown (for TaskDetail, v0.3). */
+  getTaskBreakdown(taskId: string): TaskCost | undefined {
+    return this.taskCosts.get(taskId);
+  }
+
+  /**
+   * Cache-hit ratio as a percent 0..100. Zero tokens → 0.
+   * cacheRead / (inputTokens + cacheRead + cacheWrite).
+   */
+  cacheHitPct(usage?: TokenUsage): number {
+    const u = usage ?? this.totalUsage;
+    const denom = u.inputTokens + u.cacheReadTokens + u.cacheWriteTokens;
+    if (denom === 0) return 0;
+    return (u.cacheReadTokens / denom) * 100;
+  }
+
+  /**
+   * USD/hour burn rate over `elapsedSec`. Returns 0 when elapsed too small
+   * to produce a meaningful reading (< 60 s) to avoid divide-by-small-noise.
+   */
+  ratePerHour(elapsedSec: number): number {
+    if (!Number.isFinite(elapsedSec) || elapsedSec < 60) return 0;
+    return (this.totalCost / elapsedSec) * 3600;
+  }
+
   formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
