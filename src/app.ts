@@ -15,6 +15,8 @@ import { join } from "node:path";
 import type { Epic, EpicTask, LogEntry, Run, Task } from "./lib/types.ts";
 
 import { CostTracker } from "./lib/cost-tracker.ts";
+import { RingBuffer, sparkOf } from "./lib/sparkline.ts";
+import { writeSnapshot } from "./lib/snapshot.ts";
 import { TeamsTracker } from "./lib/teams-tracker.ts";
 import { Header } from "./components/header.ts";
 import { HelpOverlay } from "./components/help-overlay.ts";
@@ -145,6 +147,15 @@ class App implements Component {
 
   // v0.3: iter clock start
   private iterStartMs: number = Date.now();
+
+  // v0.3: rolling-window sparklines fed by the new-iteration hook.
+  // 30 samples each, rendered in header row-2 at ≥200 cols.
+  private inputTokenSpark = new RingBuffer<number>(30);
+  private costSpark = new RingBuffer<number>(30);
+  private iterDurationSpark = new RingBuffer<number>(30);
+
+  // v0.3: transient snapshot toast that clears itself.
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   // References
   private logWatcher: LogWatcher | null = null;
@@ -295,6 +306,22 @@ class App implements Component {
       this.tui?.requestRender();
     });
     this.logWatcher.on("new-iteration", (iteration) => {
+      // v0.3: capture per-iteration telemetry into sparkline rings
+      // BEFORE resetting the iteration counters.
+      const iterUsage = this.costTracker.iteration;
+      const iterDurationSec = Math.max(
+        0,
+        Math.floor((Date.now() - this.iterStartMs) / 1000)
+      );
+      if (iteration > 1) {
+        this.inputTokenSpark.push(iterUsage.inputTokens);
+        this.costSpark.push(
+          iterUsage.inputTokens + iterUsage.outputTokens +
+            iterUsage.cacheReadTokens + iterUsage.cacheWriteTokens
+        );
+        this.iterDurationSpark.push(iterDurationSec);
+      }
+
       this.state.iteration = iteration;
       this.outputPanel.setIteration(iteration);
       this.outputPanel.clearBuffer();
@@ -410,6 +437,9 @@ class App implements Component {
       cost: costStr,
       cachePct,
       rateUsdPerHour: rate,
+      inputSpark: this.inputTokenSpark.size > 0 ? sparkOf(this.inputTokenSpark) : '',
+      costSpark: this.costSpark.size > 0 ? sparkOf(this.costSpark) : '',
+      iterSpark: this.iterDurationSpark.size > 0 ? sparkOf(this.iterDurationSpark) : '',
     });
     this.statusBar.update({
       totalCost: `${costStr} total`,
@@ -425,6 +455,36 @@ class App implements Component {
       }
     }
     this.taskList.setTaskCosts(taskCostMap);
+  }
+
+  /**
+   * v0.3: capture the current frame to /tmp and flash a transient toast.
+   * Requires the TUI to be attached so we can compute the width; falls back
+   * to 120 cols if detached.
+   */
+  private captureSnapshot(): void {
+    try {
+      const width = this.tui?.terminal?.columns ?? 120;
+      const frame = this.render(width);
+      const paths = writeSnapshot(frame);
+      const toast = `snapshot → ${paths.ansi}`;
+      this.statusBar.update({ toast });
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => {
+        this.statusBar.update({ toast: undefined });
+        this.tui?.requestRender();
+      }, 2500);
+      this.tui?.requestRender();
+    } catch (err) {
+      this.statusBar.update({
+        toast: `snapshot failed: ${(err as Error).message ?? 'unknown'}`,
+      });
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => {
+        this.statusBar.update({ toast: undefined });
+        this.tui?.requestRender();
+      }, 2500);
+    }
   }
 
   private updateTeamDisplay(): void {
@@ -630,6 +690,12 @@ class App implements Component {
       this.cleanup();
       this.tui?.stop();
       process.exit(0);
+    }
+
+    // v0.3: `s` — snapshot the current frame to /tmp for partner-demo sharing.
+    if (data === "s" || matchesKey(data, "s")) {
+      this.captureSnapshot();
+      return;
     }
 
     // j/k navigation - forward to task list
